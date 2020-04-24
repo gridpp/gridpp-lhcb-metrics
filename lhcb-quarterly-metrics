@@ -1,0 +1,163 @@
+#!/usr/bin/env python
+#
+# Set these three variables to what you need
+#
+year    = 2020
+quarter = 1
+debug   = 0
+
+#
+# No user maintainable parts beyond this point!
+#
+
+import csv
+import urllib2
+
+startYear  = year
+startMonth = 1 + (quarter - 1 ) * 3
+
+if (quarter == 4):
+  endYear  = year + 1
+  endMonth = 1
+else:
+  endYear = year
+  endMonth = 4 + (quarter - 1 ) * 3
+
+print 'Start  %d %d' % (startYear, startMonth)
+print 'Finish %d %d' % (endYear, endMonth)
+
+def getWorkFraction(title, sites, ignoreSites, jobTypes):
+
+  if sites:
+    siteField = '&_Site=' + '%2C'.join(sites)
+  else:
+    siteField = ''
+    
+  if jobTypes:
+    jobTypesField = '&_JobType=' + '%2C'.join(jobTypes)
+  else:
+    jobTypesField = ''
+
+  workURL = 'http://lhcb-portal-dirac.cern.ch/DIRAC/s:LHCb-Production/g:lhcb_admin/Accounting/getCsvPlotData?_grouping=Site&_plotName=Cumulative%%20Normalized%%20CPU&_typeName=Job&_timeSelector=-1&_startTime=%d-%02d-01&_endTime=%d-%02d-01%s%s' %  (startYear, startMonth, endYear, endMonth, jobTypesField, siteField )
+
+
+  if debug:
+    print workURL
+
+  metricList = list(csv.reader(urllib2.urlopen( workURL )))
+  
+  if debug:
+    print metricList
+
+  allTotal = 0.0
+  ukTotal  = 0.0
+
+  for i in range(1, len(metricList[0])):
+
+     if ignoreSites and metricList[0][i] in ignoreSites:
+       if debug:
+         print 'Skipping', metricList[0][i]
+       continue
+
+     allTotal += float(metricList[-1][i])
+     
+     if metricList[0][i].endswith('.uk'):
+       ukTotal += float(metricList[-1][i])
+
+  print title,'%.1f%%' % (100.0 * ukTotal / allTotal)
+  
+  return ukTotal / allTotal
+
+def getEfficiencyRate(title, sites, jobTypes):
+
+#  efficiencyURL = 'http://lhcb-portal-dirac.cern.ch/DIRAC/s:LHCb-Production/g:lhcb_admin/AccountingPlot/getCsvPlotData?_grouping=Country&_plotName=CPU%%20efficiency&_typeName=Job&_timeSelector=-1&_startTime=%d-%02d-01&_endTime=%d-%02d-01&_JobType=%s&_Site=%s' %  (startYear, startMonth, endYear, endMonth, '%2C'.join(jobTypes), '%2C'.join(sites) )
+  
+  efficiencyURL = 'http://lhcb-portal-dirac.cern.ch/DIRAC/s:LHCb-Production/g:lhcb_admin/Accounting/getCsvPlotData?_grouping=Country&_plotName=CPU%%20efficiency&_typeName=Job&_timeSelector=-1&_startTime=%d-%02d-01&_endTime=%d-%02d-01&_JobType=%s&_Site=%s' %  (startYear, startMonth, endYear, endMonth, '%2C'.join(jobTypes), '%2C'.join(sites) )         
+
+  if debug:
+    print efficiencyURL
+
+  metricList = list(csv.reader(urllib2.urlopen( efficiencyURL )))
+  
+  if debug:
+    print metricList
+
+  total  = 0.0
+  number = 0
+
+  for pair in metricList:
+  
+    try:
+      total += float(pair[1])
+    except:
+      pass
+    else:
+      number += 1
+      
+  print title,'%.1f%%' % (total / number)
+  
+  return total / number
+
+def getSuccessRate(title, sites, jobTypes):
+
+#  finalMajorStatusURL = 'http://lhcb-portal-dirac.cern.ch/DIRAC/s:LHCb-Production/g:lhcb_admin/AccountingPlot/getCsvPlotData?_grouping=FinalMajorStatus&_plotName=Pie%%20plot%%20of%%20executed%%20jobs&_typeName=Job&_timeSelector=-2&_startTime=%d-%02d-01&_endTime=%d-%02d-01&_quarters=2016%%20Q3&_JobType=%s&_Site=%s' %  (startYear, startMonth, endYear, endMonth, '%2C'.join(jobTypes), '%2C'.join(sites) )
+
+#  finalMajorStatusURL = 'http://lhcb-portal-dirac.cern.ch/DIRAC/s:LHCb-Production/g:lhcb_admin/Accounting/getCsvPlotData?_grouping=FinalMajorStatus&_plotName=Pie%%20plot%%20of%%20executed%%20jobs&_typeName=Job&_timeSelector=-2&_startTime=%d-%02d-01&_endTime=%d-%02d-01&_quarters=2016%%20Q4&_JobType=%s&_Site=%s' %  (startYear, startMonth, endYear, endMonth, '%2C'.join(jobTypes), '%2C'.join(sites) ) 
+
+  finalMajorStatusURL = 'http://lhcb-portal-dirac.cern.ch/DIRAC/s:LHCb-Production/g:lhcb_admin/Accounting/getCsvPlotData?_grouping=FinalMajorStatus&_plotName=Pie%%20plot%%20of%%20executed%%20jobs&_typeName=Job&_timeSelector=-1&_startTime=%d-%02d-01&_endTime=%d-%02d-01&_JobType=%s&_Site=%s' %  (startYear, startMonth, endYear, endMonth, '%2C'.join(jobTypes), '%2C'.join(sites) ) 
+
+  if debug:
+    print finalMajorStatusURL
+
+  metricList = list(csv.reader(urllib2.urlopen( finalMajorStatusURL )))
+  
+  if debug:
+    print metricList
+
+  total  = 0
+  failed = 0
+  
+  for i in range(0,len(metricList[0])):
+  
+    total += float(metricList[1][i])
+     
+    if metricList[0][i] == 'Failed':
+      failed = float(metricList[1][i])
+  
+    if debug:
+      print metricList[0][i],metricList[1][i]
+
+  print title, '%.1f%%' % (100.0 * (total - failed) / total)
+  
+  return (total - failed) / total
+
+productionTypes = ['DataReconstruction', 'DataReprocessing', 'DataStripping', 'DataSwimming', 'Merge', 'Turbo']
+
+simTypes = ['MCSimulation', 'MCReconstruction', 'MCMerge', 'MCReprocessing', 'MCStripping']
+
+allTier1 = ['LCG.CNAF.it', 'LCG.GRIDKA.de', 'LCG.IN2P3.fr', 'LCG.NIKHEF.nl', 'LCG.RAL.uk', 'LCG.RRCKI.ru', 'LCG.SARA.nl', 'LCG.PIC.es']
+
+ukTier2A = ['LCG.Manchester.uk', 'VAC.Manchester.uk', 'LCG.Liverpool.uk', 'VAC.Liverpool.uk', 'LCG.Glasgow.uk', 'VAC.Glasgow.uk', 'LCG.UKI-LT2-IC-HEP.uk', 'LCG.RAL-HEP.uk', 'LCG.UKI-LT2-QMUL.uk']
+
+ukTier2 = ukTier2A + ['LCG.Oxford.uk', 'VAC.Oxford.uk', 'LCG.UKI-LT2-RHUL.uk', 'VAC.UKI-LT2-RHUL.uk', 'LCG.Brunel.uk', 'LCG.UKI-LT2-Brunel.uk', 'VAC.UKI-LT2-UCL-HEP.uk', 'LCG.Lancashire.uk', 'LCG.Lancaster.uk', 'LCG.Bristol.uk', 'LCG.Sheffield.uk', 'LCG.BHAM-HEP.uk', 'VAC.BHAM-HEP.uk', 'LCG.Cambridge.uk', 'VAC.Cambridge.uk', 'LCG.Durham.uk', 'LCG.ECDF.uk']
+
+ignoreIfTier2 = allTier1 + ['LCG.CERN.ch', 'LCG.CERN.cern', 'LCG.T-Systems.cern', 'DIRAC.YANDEX.ru', 'DIRAC.ONLINE.ch', 'BOINC.CERN.ch', 'BOINC.World.org']
+
+getSuccessRate(   'RAL prod success rate             ', ['LCG.RAL.uk'], productionTypes)
+getEfficiencyRate('RAL prod CPU efficiency           ', ['LCG.RAL.uk'], productionTypes)
+getSuccessRate(   'RAL user success rate             ', ['LCG.RAL.uk'], ['User'])
+getEfficiencyRate('RAL user CPU efficiency           ', ['LCG.RAL.uk'], ['User'])
+
+getWorkFraction(  'UK Tier-1 work fraction           ', allTier1, None, None)
+
+print
+
+getSuccessRate(   'Tier-2A user success rate         ', ukTier2A, ['User'])
+getEfficiencyRate('Tier-2A user CPU efficiency       ', ukTier2A, ['User'])
+getSuccessRate(   'Tier-2 simulation success rate    ', ukTier2, simTypes)
+getEfficiencyRate('Tier-2 simulation CPU efficiency  ', ukTier2, simTypes)
+
+getWorkFraction(  'UK Tier-2 work fraction           ', None, ignoreIfTier2, None)
+
+print
+print 'https://www.gridpp.ac.uk/wiki/RAL_Tier1_Experiments_Liaison_Meeting_Operations_Reports'
